@@ -551,18 +551,18 @@ void sendEmailAdminNotification(
                 </div>
               </>
             ) : (
-              <div className="flex h-full w-full flex-col items-center justify-center px-5 text-center">
+              <div className="absolute inset-0 flex w-full min-w-0 flex-col items-center justify-center px-5 text-center">
                 <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-red-600/10">
                   <span className="text-3xl text-red-500">▶</span>
                 </div>
 
-                <h3 className="text-xl font-bold sm:text-2xl">
-                  Join Live to continue watching
-                </h3>
+                <h3 className="w-full break-words text-xl font-bold sm:text-2xl">
+  Join Live to continue watching
+</h3>
 
-                <p className="mt-2 text-sm text-gray-400">
-                  Connect with Live Pahina to access the live experience.
-                </p>
+                <p className="mt-2 w-full break-words text-sm text-gray-400">
+  Connect with Live Pahina to access the live experience.
+</p>
 
                 <button
                   onClick={openJoin}
@@ -575,43 +575,44 @@ void sendEmailAdminNotification(
           </div>
 
           {/* VIDEO INFORMATION */}
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/10 px-4 py-4 sm:px-6">
-            <div>
-              <h3 className="text-sm font-bold sm:text-base">
-                Live Pahina Broadcast
-              </h3>
-              <p className="mt-1 text-xs text-gray-500">
-                Enjoy our continuous live experience.
-              </p>
-            </div>
+<div className="flex items-center justify-between gap-2 border-t border-white/10 px-3 py-4 sm:px-6">
+  <div className="min-w-0 flex-1">
+    <h3 className="text-sm font-bold sm:text-base">
+      Live Pahina Broadcast
+    </h3>
+    <p className="mt-1 text-xs text-gray-500">
+      Enjoy our continuous live experience.
+    </p>
+  </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleReaction("like")}
-                className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm transition ${
-                  reaction === "like"
-                    ? "border-blue-500/40 bg-blue-500/15 text-blue-400"
-                    : "border-white/10 bg-white/5 text-gray-300 hover:bg-white/10"
-                }`}
-              >
-                <span>👍</span>
-                <span>{likes}</span>
-              </button>
+  <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+    <button
+      onClick={() => handleReaction("like")}
+      className={`flex items-center gap-2 rounded-lg border px-2 py-2.5 text-sm transition sm:px-4 ${
+        reaction === "like"
+          ? "border-blue-500/40 bg-blue-500/15 text-blue-400"
+          : "border-white/10 bg-white/5 text-gray-300 hover:bg-white/10"
+      }`}
+    >
+      <span>👍</span>
+      <span>{likes}</span>
+    </button>
 
-              <button
-                onClick={() => handleReaction("dislike")}
-                className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm transition ${
-                  reaction === "dislike"
-                    ? "border-red-500/40 bg-red-500/15 text-red-400"
-                    : "border-white/10 bg-white/5 text-gray-300 hover:bg-white/10"
-                }`}
-              >
-                <span>👎</span>
-                <span>{dislikes}</span>
-              </button>
-            </div>
-          </div>
-        </div>
+    <button
+      onClick={() => handleReaction("dislike")}
+      className={`flex items-center gap-2 rounded-lg border px-2 py-2.5 text-sm transition sm:px-4 ${
+        reaction === "dislike"
+          ? "border-red-500/40 bg-red-500/15 text-red-400"
+          : "border-white/10 bg-white/5 text-gray-300 hover:bg-white/10"
+      }`}
+    >
+      <span>👎</span>
+      <span>{dislikes}</span>
+    </button>
+  </div>
+</div>
+</div>
+
 
         {/* FOOTER */}
         <footer className="mt-14 border-t border-white/10 pt-6 text-center">
