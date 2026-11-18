@@ -529,7 +529,7 @@ void sendEmailAdminNotification(
 
         {/* VIDEO PLAYER */}
         <div className="overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-red-950/10">
-          <div className="relative flex aspect-video items-center justify-center bg-[#111218]">
+          <div className="relative flex aspect-video min-h-[280px] items-center justify-center bg-[#111218] sm:min-h-0">
             {!videoEnded ? (
               <>
                 <video
