@@ -1,6 +1,8 @@
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* config options here */
+  allowedDevOrigins: ["10.60.72.190"],
+
   turbopack: {
     rules: {
       "*.css": {

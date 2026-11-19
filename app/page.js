@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { supabase } from "@/lib/supabase";
 import Image from "next/image";
@@ -65,6 +64,7 @@ export default function Home() {
   const [showJoin, setShowJoin] = useState(false);
   const [joinMethod, setJoinMethod] = useState(null);
   const [videoEnded, setVideoEnded] = useState(false);
+  const videoRef = useRef(null);
 
   const [phase, setPhase] = useState("choose");
   const [countryCode, setCountryCode] = useState("PH");
@@ -527,52 +527,55 @@ void sendEmailAdminNotification(
           </p>
         </div>
 
-        {/* VIDEO PLAYER */}
-        <div className="overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-red-950/10">
-          <div className="relative flex aspect-video min-h-[280px] items-center justify-center bg-[#111218] sm:min-h-0">
-            {!videoEnded ? (
-              <>
-                <video
-                  className="h-full w-full object-contain"
-                  src="/videos/live-video.mp4"
-                  autoPlay
-                  muted
-                  playsInline
-                  controls
-                  preload="metadata"
-                  onEnded={() => setVideoEnded(true)}
-                />
+       {/* VIDEO PLAYER */}
+<div className="overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-red-950/10">
+  <div className="relative grid aspect-video min-h-[280px] w-full place-items-center overflow-hidden bg-[#111218] sm:min-h-0">
 
-                <div className="pointer-events-none absolute left-4 top-4 flex items-center gap-2 rounded-md bg-red-600 px-3 py-1.5">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-white"></span>
-                  <span className="text-[10px] font-bold tracking-widest">
-                    LIVE NOW
-                  </span>
-                </div>
-              </>
-            ) : (
-              <div className="absolute inset-0 flex w-full min-w-0 flex-col items-center justify-center px-5 text-center">
-                <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-red-600/10">
-                  <span className="text-3xl text-red-500">▶</span>
-                </div>
+    {!videoEnded && (
+      <video
+  ref={videoRef}
+  className="absolute left-1/2 top-0 h-full w-auto max-w-full -translate-x-1/2 object-contain"
+  src="/videos/live-video.mp4"
+  autoPlay
+  muted
+  playsInline
+  preload="metadata"
+  onTimeUpdate={(e) => {
+    if (e.currentTarget.currentTime >= 4) {
+      e.currentTarget.pause();
+      setVideoEnded(true);
+    }
+  }}
+  onEnded={() => {
+    setVideoEnded(true);
+  }}
+/>
+    )}
 
-                <h3 className="w-full break-words text-xl font-bold sm:text-2xl">
-  Join Live to continue watching
-</h3>
+    {videoEnded && (
+      <div className="absolute inset-0 z-10 flex w-full min-w-0 flex-col items-center justify-center bg-[#111218] px-5 text-center">
+        <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-red-600/10">
+          <span className="text-3xl text-red-500">▶</span>
+        </div>
 
-                <p className="mt-2 w-full break-words text-sm text-gray-400">
-  Connect with Live Pahina to access the live experience.
-</p>
+        <h3 className="w-full break-words text-xl font-bold sm:text-2xl">
+          Join Live to continue watching
+        </h3>
 
-                <button
-                  onClick={openJoin}
-                  className="mt-6 rounded-xl bg-red-600 px-9 py-3.5 text-sm font-bold tracking-wider shadow-lg shadow-red-900/30 transition hover:bg-red-700"
-                >
-                  JOIN LIVE →
-                </button>
-              </div>
-            )}
-          </div>
+        <p className="mt-2 w-full break-words text-sm text-gray-400">
+          Connect with Live Pahina to access the live experience.
+        </p>
+
+        <button
+          onClick={openJoin}
+          className="mt-6 rounded-xl bg-red-600 px-9 py-3.5 text-sm font-bold tracking-wider shadow-lg shadow-red-900/30 transition hover:bg-red-700"
+        >
+          JOIN LIVE →
+        </button>
+      </div>
+    )}
+
+  </div>
 
           {/* VIDEO INFORMATION */}
 <div className="flex items-center justify-between gap-2 border-t border-white/10 px-3 py-4 sm:px-6">
